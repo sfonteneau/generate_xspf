@@ -1,0 +1,7 @@
+# Install this file as /etc/nginx/xspf-users.map.
+# This is the single source of truth used by BOTH nginx and create_xspf.py.
+# Prefer simple usernames using [A-Za-z0-9._-].
+# Generate secrets with: openssl rand -hex 32
+
+alice "replace-with-a-long-random-secret";
+bob   "replace-with-another-long-random-secret";

@@ -1,0 +1,91 @@
+# nginx example compatible with create_xspf.py
+#
+# Matching generator command:
+#   python3 create_xspf.py \
+#     --media-root /srv/media/library \
+#     --output-dir /srv/appdata/li/playlists \
+#     --users-map /etc/nginx/xspf-users.map \
+#     --base-url https://media.example.com \
+#     --url-prefix /library \
+#     --playlist-url-prefix /playlists
+#
+# The map block belongs in nginx's http {} context, not inside server {}.
+
+map $arg_u $xspf_secret {
+    # IMPORTANT: an unknown user must resolve to an empty secret.
+    default "";
+
+    # Single source of truth shared with create_xspf.py.
+    include /etc/nginx/xspf-users.map;
+}
+
+server {
+    listen 443 ssl;
+    server_name media.example.com;
+
+    # Adapt these paths to your TLS / Certbot installation.
+    ssl_certificate     /etc/letsencrypt/live/media.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/media.example.com/privkey.pem;
+
+    # Signed media URL example:
+    # https://media.example.com/library/Film.mkv?u=alice&e=2145916800&s=TOKEN
+    location ^~ /library/ {
+        # Never allow a user that is missing from the nginx user map.
+        if ($xspf_secret = "") {
+            return 403;
+        }
+
+        # s = URL-safe Base64 checksum; e = Unix expiration timestamp.
+        secure_link $arg_s,$arg_e;
+
+        # This must match the Python calculation exactly:
+        # md5(str(expiration) + decoded_path + user_secret)
+        secure_link_md5 "$secure_link_expires$uri$xspf_secret";
+
+        # Invalid signature or invalid parameters.
+        if ($secure_link = "") {
+            return 403;
+        }
+
+        # Valid signature, but expired.
+        if ($secure_link = "0") {
+            return 410;
+        }
+
+        # /library/foo/bar.mkv -> /srv/media/library/foo/bar.mkv
+        alias /downloads/;
+        autoindex off;
+
+        add_header X-Content-Type-Options nosniff always;
+    }
+
+    # Signed XSPF playlist URL example:
+    # https://media.example.com/playlists/alice.xspf?u=alice&e=2145916800&s=TOKEN
+    #
+    # The playlist URL uses the exact same signature mechanism as media URLs.
+    # Removing alice from xspf-users.map and reloading nginx therefore revokes
+    # both her media URLs and her playlist URL immediately.
+    location ^~ /playlists/ {
+        if ($xspf_secret = "") {
+            return 403;
+        }
+
+        secure_link $arg_s,$arg_e;
+        secure_link_md5 "$secure_link_expires$uri$xspf_secret";
+
+        if ($secure_link = "") {
+            return 403;
+        }
+
+        if ($secure_link = "0") {
+            return 410;
+        }
+
+        alias /downloads/playlists/;
+        autoindex off;
+        default_type application/xspf+xml;
+
+        add_header Cache-Control "private, no-store" always;
+        add_header X-Content-Type-Options nosniff always;
+    }
+}
