@@ -6,6 +6,8 @@ from jinja2 import Template
 url_nextcloud = r"https://nextcloud.mydomain.lan/s/123456/download"
 folder='/downloads'
 
+list_ok=["3g2", "3gp", "3gp2", "3gpp", "amv", "asf", "avi", "bik", "crf", "dav", "divx", "drc", "dv", "dvr-ms" ,"evo", "f4v", "flv", "gvi", "gxf", "iso","m1v", "m2v", "m2t", "m2ts", "m4v", "mkv", "mov","mp2", "mp2v", "mp4", "mp4v", "mpe", "mpeg", "mpeg1", "mpeg2", "mpeg4", "mpg", "mpv2", "mts", "mtv", "mxf", "mxg", "nsv", "nuv","ogg", "ogm", "ogv", "ogx", "ps", "rec", "rm", "rmvb", "rpl", "thp", "tod", "ts", "tts", "txd", "vob", "vro", "webm", "wm", "wmv", "wtv", "xesc"]
+
 template = r"""<?xml version="1.0" encoding="UTF-8"?>
 <playlist xmlns="http://xspf.org/ns/0/" xmlns:vlc="http://www.videolan.org/vlc/playlist/ns/0/" version="1">
         <title>Liste de lecture</title>
@@ -41,6 +43,8 @@ for f in sorted(glob.glob('%s/**' % folder,recursive=True), key=os.path.getmtime
     else:
         filename = d
         path= '/'
+    if not filename.split('.')[-1].lower() in list_ok:
+        continue        
     title = filename.rsplit('.',1)[0].replace('.',' ').replace('_',' ')
     dict_filename[title]= {"title":title,"filename":quote(filename),"path":quote(path).replace('/',r'%2F'),"nb":str(nb)}
     nb = nb + 1
