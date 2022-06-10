@@ -19,7 +19,7 @@ template = r"""<?xml version="1.0" encoding="UTF-8"?>
                         <location>{{ dict_filename[entry]['urldl'] }}</location>
                         <extension application="http://www.videolan.org/vlc/playlist/0">
                                 <vlc:id>{{dict_filename[entry]['nb']}}</vlc:id>
-                                <vlc:option>network-caching=120000</vlc:option>
+                                <vlc:option>network-caching=2000</vlc:option>
                         </extension>
                 </track>{% endfor %}
         </trackList>
