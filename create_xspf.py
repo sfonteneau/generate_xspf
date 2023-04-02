@@ -47,8 +47,8 @@ for f in sorted(glob.glob('%s/**' % folder,recursive=True), key=os.path.getmtime
     else:
         filename = d
         path= '/'
- 
-    title = filename.rsplit('.',1)[0].replace('.',' ').replace('_',' ')
+
+    title = filename.rsplit('.',1)[0].replace('.',' ').replace('_',' ').replace('&','&#38;').replace('<','&#60;').replace('>','&#62;').replace("'",'&#39;').replace('"','&#34;')
 
     if not nextcloud_mode :
         dict_filename[title]= {"title":title,"urldl":url_dl + quote(d),"nb":str(nb)}
