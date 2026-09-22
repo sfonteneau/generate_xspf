@@ -7,7 +7,9 @@
 #     --users-map /etc/nginx/xspf-users.map \
 #     --base-url https://media.example.com \
 #     --url-prefix /library \
-#     --playlist-url-prefix /playlists
+#     --playlist-url-prefix /playlists \
+#     --media-ttl 21600 \
+#     --playlist-expiration 2145916800
 #
 # The map block belongs in nginx's http {} context, not inside server {}.
 
@@ -28,7 +30,7 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/media.example.com/privkey.pem;
 
     # Signed media URL example:
-    # https://media.example.com/library/Film.mkv?u=alice&e=2145916800&s=TOKEN
+    # https://media.example.com/library/Film.mkv?u=alice&e=<now+21600>&s=TOKEN
     location ^~ /library/ {
         # Never allow a user that is missing from the nginx user map.
         if ($xspf_secret = "") {
@@ -53,11 +55,14 @@ server {
         }
 
         # /library/foo/bar.mkv -> /srv/media/library/foo/bar.mkv
-        alias /downloads/;
+        alias /srv/media/library/;
         autoindex off;
 
         add_header X-Content-Type-Options nosniff always;
     }
+
+    # Media URLs are short-lived; the expiration comes from the URL itself.
+    # nginx therefore needs no TTL-specific configuration here.
 
     # Signed XSPF playlist URL example:
     # https://media.example.com/playlists/alice.xspf?u=alice&e=2145916800&s=TOKEN
@@ -81,7 +86,7 @@ server {
             return 410;
         }
 
-        alias /downloads/playlists/;
+        alias /srv/appdata/li/playlists/;
         autoindex off;
         default_type application/xspf+xml;
 

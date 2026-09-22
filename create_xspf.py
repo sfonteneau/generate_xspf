@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate one XSPF playlist per user with stable signed URLs.
+"""Generate one XSPF playlist per user with short-lived media URLs.
 
 The nginx user map is the single source of truth for users and secrets.
 Runtime configuration is provided with command-line arguments only; no
@@ -23,6 +23,7 @@ import requests
 
 
 PERMANENT_EXPIRATION = 2145916800
+DEFAULT_MEDIA_TTL = 21600
 DEFAULT_NETWORK_CACHING = 2000
 
 VIDEO_EXTENSIONS = {
@@ -53,7 +54,8 @@ class Config:
     playlist_url_prefix: str
     extra_playlists: tuple[str, ...]
     verify_tls: bool
-    expiration: int
+    media_ttl: int
+    playlist_expiration: int
     network_caching: int
 
 
@@ -61,8 +63,8 @@ def parse_args(argv: list[str] | None = None) -> Config:
     """Parse command-line options and return normalized configuration."""
     parser = argparse.ArgumentParser(
         description=(
-            "Generate one XSPF playlist per nginx-map user with stable "
-            "secure_link-compatible URLs."
+            "Generate one XSPF playlist per nginx-map user with short-lived "
+            "media URLs and a long-lived signed playlist URL."
         )
     )
     parser.add_argument(
@@ -117,11 +119,21 @@ def parse_args(argv: list[str] | None = None) -> Config:
         help="disable TLS certificate verification for external playlists",
     )
     parser.add_argument(
-        "--expiration",
+        "--media-ttl",
+        type=int,
+        default=DEFAULT_MEDIA_TTL,
+        metavar="SECONDS",
+        help=f"media URL lifetime in seconds (default: {DEFAULT_MEDIA_TTL}, 6 hours)",
+    )
+    parser.add_argument(
+        "--playlist-expiration",
         type=int,
         default=PERMANENT_EXPIRATION,
         metavar="UNIX_TIMESTAMP",
-        help=f"signed URL expiration timestamp (default: {PERMANENT_EXPIRATION})",
+        help=(
+            "signed playlist URL expiration timestamp "
+            f"(default: {PERMANENT_EXPIRATION})"
+        ),
     )
     parser.add_argument(
         "--network-caching",
@@ -145,8 +157,10 @@ def parse_args(argv: list[str] | None = None) -> Config:
     if playlist_url_prefix == "/":
         parser.error("--playlist-url-prefix cannot be the site root '/' ")
 
-    if args.expiration <= 0:
-        parser.error("--expiration must be a positive Unix timestamp")
+    if args.media_ttl <= 0:
+        parser.error("--media-ttl must be a positive number of seconds")
+    if args.playlist_expiration <= 0:
+        parser.error("--playlist-expiration must be a positive Unix timestamp")
     if args.network_caching < 0:
         parser.error("--network-caching cannot be negative")
 
@@ -161,7 +175,8 @@ def parse_args(argv: list[str] | None = None) -> Config:
         playlist_url_prefix=playlist_url_prefix,
         extra_playlists=tuple(args.extra_playlist),
         verify_tls=not args.insecure_extra_playlists,
-        expiration=args.expiration,
+        media_ttl=args.media_ttl,
+        playlist_expiration=args.playlist_expiration,
         network_caching=args.network_caching,
     )
 
@@ -181,20 +196,27 @@ def build_signed_url(
     path: str,
     username: str,
     secret: str,
+    expiration: int,
     config: Config,
 ) -> str:
-    """Build a signed media URL for one user."""
-    token = sign_path(path, config.expiration, secret)
+    """Build a secure_link-compatible signed URL for one user."""
+    token = sign_path(path, expiration, secret)
     return (
         f"{config.base_url}{quote(path, safe='/')}"
-        f"?u={quote(username, safe='')}&e={config.expiration}&s={token}"
+        f"?u={quote(username, safe='')}&e={expiration}&s={token}"
     )
 
 
 def build_playlist_url(username: str, secret: str, config: Config) -> str:
-    """Return a signed public URL for a user's generated XSPF playlist."""
+    """Return the long-lived signed URL for a user's generated XSPF playlist."""
     playlist_path = f"{config.playlist_url_prefix}/{username}.xspf"
-    return build_signed_url(playlist_path, username, secret, config)
+    return build_signed_url(
+        playlist_path,
+        username,
+        secret,
+        config.playlist_expiration,
+        config,
+    )
 
 
 def prettify_title(filename: str) -> str:
@@ -385,6 +407,7 @@ def build_playlist(
     secret: str,
     local_files: list[Path],
     external_tracks: list[dict[str, str]],
+    media_expiration: int,
     config: Config,
 ) -> bytes:
     """Build one complete XSPF playlist for a user."""
@@ -419,7 +442,13 @@ def build_playlist(
             playlist_extension,
             track_id,
             title,
-            build_signed_url(signed_path, username, secret, config),
+            build_signed_url(
+                signed_path,
+                username,
+                secret,
+                media_expiration,
+                config,
+            ),
             config.network_caching,
             album,
         )
@@ -473,6 +502,10 @@ def main(argv: list[str] | None = None) -> int:
     external_tracks = load_external_tracks(config)
     config.output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Use one shared expiration for every media URL generated in this run.
+    # With the default TTL, each media URL is valid for six hours from now.
+    media_expiration = int(time.time()) + config.media_ttl
+
     generated_names: set[str] = set()
     for username, secret in sorted(users.items(), key=lambda item: item[0].lower()):
         target = config.output_dir / f"{username}.xspf"
@@ -481,6 +514,7 @@ def main(argv: list[str] | None = None) -> int:
             secret,
             local_files,
             external_tracks,
+            media_expiration,
             config,
         )
         write_atomically(target, content)
@@ -496,7 +530,11 @@ def main(argv: list[str] | None = None) -> int:
             orphan.unlink()
             print(f"{orphan.stem}: playlist removed (user no longer authorized)")
 
-    print("\nSigned playlist URLs to give to users:")
+    print(
+        f"\nMedia URLs expire at Unix timestamp {media_expiration} "
+        f"({config.media_ttl} seconds from generation)."
+    )
+    print("Signed playlist URLs to give to users:")
     for username in sorted(users, key=str.lower):
         print(f"{username}: {build_playlist_url(username, users[username], config)}")
 
