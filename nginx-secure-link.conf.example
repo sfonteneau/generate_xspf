@@ -2,14 +2,9 @@
 #
 # Matching generator command:
 #   python3 create_xspf.py \
-#     --media-root /srv/media/library \
-#     --output-dir /srv/appdata/li/playlists \
+#     --media-root /downloads \
 #     --users-map /etc/nginx/xspf-users.map \
 #     --base-url https://media.example.com \
-#     --url-prefix /library \
-#     --playlist-url-prefix /playlists \
-#     --media-ttl 21600 \
-#     --playlist-expiration 2145916800
 #
 # The map block belongs in nginx's http {} context, not inside server {}.
 
@@ -54,8 +49,7 @@ server {
             return 410;
         }
 
-        # /library/foo/bar.mkv -> /srv/media/library/foo/bar.mkv
-        alias /srv/media/library/;
+        alias /downloads/;
         autoindex off;
 
         add_header X-Content-Type-Options nosniff always;
@@ -85,8 +79,8 @@ server {
         if ($secure_link = "0") {
             return 410;
         }
+        alias /downloads/playlists/;
 
-        alias /srv/appdata/li/playlists/;
         autoindex off;
         default_type application/xspf+xml;
 

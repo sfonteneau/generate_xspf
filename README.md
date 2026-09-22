@@ -100,12 +100,12 @@ No external playlist is imported unless `--extra-playlist` is explicitly provide
 
 ## Recommended run command
 
-Example using `/srv/media/library` as the media directory and `/srv/appdata/li/playlists` for generated playlists:
+Example using `/downloads` as the media directory and `/downloads/playlists` for generated playlists:
 
 ```bash
 python3 create_xspf.py \
-  --media-root /srv/media/library \
-  --output-dir /srv/appdata/li/playlists \
+  --media-root /downloads \
+  --output-dir /downloads/playlists \
   --users-map /etc/nginx/xspf-users.map \
   --base-url https://media.example.com \
   --url-prefix /library \
@@ -118,8 +118,8 @@ To merge one or more external playlists:
 
 ```bash
 python3 create_xspf.py \
-  --media-root /srv/media/library \
-  --output-dir /srv/appdata/li/playlists \
+  --media-root /downloads \
+  --output-dir /downloads/playlists \
   --users-map /etc/nginx/xspf-users.map \
   --base-url https://media.example.com \
   --url-prefix /library \
@@ -194,20 +194,20 @@ For example:
 ```nginx
 location ^~ /library/ {
     # secure_link checks
-    alias /srv/media/library/;
+    alias /downloads/;
 }
 
 location ^~ /playlists/ {
     # secure_link checks
-    alias /srv/appdata/li/playlists/;
+    alias /downloads/playlists/;
 }
 ```
 
 matches:
 
 ```bash
---media-root /srv/media/library \
---output-dir /srv/appdata/li/playlists \
+--media-root /downloads \
+--output-dir /downloads/playlists \
 --url-prefix /library \
 --playlist-url-prefix /playlists
 ```
@@ -231,8 +231,8 @@ Remove the user from `/etc/nginx/xspf-users.map`, regenerate the playlists with 
 
 ```bash
 python3 create_xspf.py \
-  --media-root /srv/media/library \
-  --output-dir /srv/appdata/li/playlists \
+  --media-root /downloads \
+  --output-dir /downloads/playlists \
   --users-map /etc/nginx/xspf-users.map \
   --base-url https://media.example.com \
   --url-prefix /library \
